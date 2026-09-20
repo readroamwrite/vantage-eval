@@ -1,0 +1,3 @@
+{"id": "a1", "input": "What is 2 + 2?", "expected": "4", "tags": ["tier:1", "cap:arithmetic"]}
+{"id": "a2", "input": "What is 12 * 12?", "expected": 144, "tags": ["tier:3", "cap:arithmetic"], "meta": {"base_id": "m12"}}
+{"id": "chat1", "input": [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}, {"role": "user", "content": "2+2?"}], "expected": "4", "tags": ["multi"]}

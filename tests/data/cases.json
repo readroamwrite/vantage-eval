@@ -1,0 +1,1 @@
+{"name": "tiny", "cases": [{"id": "x", "input": "ping", "expected": "pong", "tags": "a;b"}]}

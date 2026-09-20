@@ -1,0 +1,3 @@
+id,input,expected,tags,system
+c1,What is 3 + 4?,7,tier:1;cap:arithmetic,Answer with a number.
+c2,Say hello,"""hello""",greeting,

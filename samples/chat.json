@@ -1,0 +1,10 @@
+{"messages": [
+ {"role": "user", "content": "I'm planning a small web app for tracking my reading. Should I use SQLite or Postgres?"},
+ {"role": "assistant", "content": "For a single-user app, SQLite is simpler: no server, one file, easy backups. Postgres makes sense once you need concurrent writers or hosting."},
+ {"role": "user", "content": "OK, SQLite then. What about the frontend, React or plain HTML templates?"},
+ {"role": "assistant", "content": "If the pages are mostly forms and lists, server-rendered templates keep it simple. React pays off when there is a lot of client-side interaction."},
+ {"role": "user", "content": "Templates it is. One more thing: how should I back up the database?"},
+ {"role": "assistant", "content": "Copy the file while no writes are happening, or use the SQLite online backup API. A nightly cron job that copies it to cloud storage is enough."},
+ {"role": "user", "content": "Decision: SQLite, templates, nightly backup to S3. Can you draft the schema next?"},
+ {"role": "assistant", "content": "Sure. Tables: books(id, title, author, status), sessions(id, book_id, date, pages). I'll add indexes on book_id and date."}
+]}

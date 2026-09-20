@@ -1,0 +1,10 @@
+{"id": "s01", "input": "What is 2 + 2?", "expected": 4, "tags": ["cap:arithmetic", "tier:1"]}
+{"id": "s02", "input": "Compute 17 * 3.", "expected": 51, "tags": ["cap:arithmetic", "tier:2"]}
+{"id": "s03", "input": "What is 100 - 37?", "expected": 63, "tags": ["cap:arithmetic", "tier:1"]}
+{"id": "s04", "input": "A shop sells pens at 3 dollars each. How much do 7 pens cost?", "expected": 21, "tags": ["cap:arithmetic", "tier:3", "format:word"]}
+{"id": "s05", "input": "What is 144 / 12?", "expected": 12, "tags": ["cap:arithmetic", "tier:2"]}
+{"id": "s06", "input": "Sara had 15 apples and gave away 6. How many are left?", "expected": 9, "tags": ["cap:arithmetic", "tier:3", "format:word"]}
+{"id": "s07", "input": "What is 9 * 9?", "expected": 81, "tags": ["cap:arithmetic", "tier:1"]}
+{"id": "s08", "input": "What is 1000 - 1?", "expected": 999, "tags": ["cap:arithmetic", "tier:1"]}
+{"id": "s09", "input": "If a train travels 60 km per hour for 2 hours, how far does it go?", "expected": 120, "tags": ["cap:arithmetic", "tier:3", "format:word"]}
+{"id": "s10", "input": "Compute 23 + 19.", "expected": 42, "tags": ["cap:arithmetic", "tier:1"]}
