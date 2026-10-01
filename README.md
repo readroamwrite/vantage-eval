@@ -99,7 +99,7 @@ The full command reference, the spec-string syntax and the dataset format are in
 |---|---|
 | **Trajectory** | The record of one run: an ordered list of `Step`s (system, user, assistant, tool call, tool result). A single LLM call and a fifty-step agent run use the same type. |
 | **Target** | Anything that turns a case into a trajectory. Built in: a single model call, a ReAct agent running in a sandbox, and a scripted agent for replaying known behaviour. You can also plug in your own system. |
-| **Scorer** | Turns a finished trajectory into a `Score`. There are rule scorers (exact, regex, numeric tolerance, JSON, multiple choice), behaviour scorers for agents (tool called, tool order, forbidden actions, test tampering, fake success), a rubric judge, and a failure classifier. |
+| **Scorer** | Turns a finished trajectory into a `Score`. There are rule scorers (exact, regex, numeric tolerance, JSON, multiple choice), behaviour scorers for agents (tool called, tool order, forbidden actions, test tampering, held-out tests, fake success), a rubric judge, and a failure classifier. |
 | **Judge** | An LLM scorer driven by a rubric. It can grade one answer, grade the same answer several times at temperature, or compare two answers in both orders. How well it agrees with gold labels is measured rather than assumed. |
 | **Monitor** | Watches a run while it happens and returns a `Verdict`, which may halt the run. Every monitor declares a `view`: `output` (the task and the final message) or `trajectory` (every step and tool call). |
 | **View** | The vantage point. Threat tags in the taxonomy record where their evidence appears, so the framework knows which monitors are able to see which threats. |

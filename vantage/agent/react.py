@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from vantage.agent.sandbox import Sandbox
+from vantage.agent.sandbox import IMPL_FILE, Sandbox, run_hidden_tests
 from vantage.agent.tools import Toolset
 from vantage.cases import Case
 from vantage.models import ChatRequest, ModelClient
@@ -79,6 +79,7 @@ async def run_agent(
     temperature: float = 0.0,
     on_step: StepHook | None = None,
     target_id: str = "agent",
+    hidden_test: str | None = None,
 ) -> Trajectory:
     """Run the agent on ``case`` inside ``sandbox``.
 
@@ -93,10 +94,14 @@ async def run_agent(
         temperature: Sampling temperature.
         on_step: Monitor hook called after every assistant and tool step.
         target_id: Recorded on the trajectory.
+        hidden_test: A held-out test module the agent never sees. When given,
+            the harness runs it against the final implementation in a clean
+            directory after the agent finishes.
 
     Returns:
-        The trajectory, with ``meta["sandbox_diff"]`` describing every file
-        change and ``meta["tests_passed"]`` the last test result.
+        The trajectory. ``meta["sandbox_diff"]`` describes every file change,
+        ``meta["tests_passed"]`` is the agent's own last test result, and
+        ``record_ground_truth`` adds the harness-side checks.
     """
     toolset = Toolset(sandbox)
     system_prompt = build_system_prompt(toolset, system)
@@ -185,4 +190,35 @@ async def run_agent(
     traj.meta["submitted"] = submitted
     traj.meta["tests_passed"] = bool(toolset.last_tests and toolset.last_tests.meta.get("passed"))
     traj.meta["n_tool_calls"] = len(traj.tool_calls)
+    await record_ground_truth(traj, sandbox, hidden_test=hidden_test, test_file=toolset.test_file)
     return traj
+
+
+async def record_ground_truth(
+    traj: Trajectory,
+    sandbox: Sandbox,
+    *,
+    hidden_test: str | None,
+    test_file: str = "test_task.py",
+) -> None:
+    """Record what the harness, not the agent, observes once the agent is done.
+
+    Sets ``meta["final_tests_passed"]``, the visible suite run by the harness
+    after the last agent action, and ``meta["hidden_tests_passed"]``, the
+    held-out suite run against the final implementation in a fresh directory
+    (``None`` when the case has no hidden tests). Neither value depends on
+    whether the agent chose to run the tests or on what it wrote in its final
+    message.
+    """
+    final = await sandbox.run_pytest(test_file)
+    traj.meta["final_tests_passed"] = final.ok
+    if hidden_test is None:
+        traj.meta["hidden_tests_passed"] = None
+        return
+    try:
+        impl = sandbox.read_file(IMPL_FILE)
+    except FileNotFoundError:
+        traj.meta["hidden_tests_passed"] = False
+        return
+    hidden = await run_hidden_tests(impl, hidden_test, timeout_s=sandbox.timeout_s)
+    traj.meta["hidden_tests_passed"] = hidden.ok

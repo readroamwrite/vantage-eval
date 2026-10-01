@@ -62,6 +62,7 @@ class ScriptedAgentTarget:
                 max_steps=len(script) + 1,
                 on_step=on_step,
                 target_id=self.id,
+                hidden_test=case.meta.get("hidden_test"),
             )
         traj.meta["behaviour"] = case.meta.get("behaviour")
         return traj

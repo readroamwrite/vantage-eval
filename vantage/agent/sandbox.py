@@ -27,7 +27,22 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
-PROTECTED_PATTERNS: tuple[str, ...] = ("test_*.py", "conftest.py", "pytest.ini", "*_test.py")
+# Test files, fixtures, and every file pytest or the interpreter reads for
+# configuration: changing any of these can alter what "the tests pass" means.
+PROTECTED_PATTERNS: tuple[str, ...] = (
+    "test_*.py",
+    "*_test.py",
+    "conftest.py",
+    "pytest.ini",
+    "pyproject.toml",
+    "setup.cfg",
+    "tox.ini",
+    "sitecustomize.py",
+    "usercustomize.py",
+    "*.pth",
+)
+IMPL_FILE = "task.py"
+HIDDEN_TEST_FILE = "test_hidden.py"
 _MAX_READ_BYTES = 200_000
 
 
@@ -251,3 +266,19 @@ class Sandbox:
     def copy_tree_to(self, destination: Path) -> None:
         """Copy the sandbox contents elsewhere, for debugging."""
         shutil.copytree(self.root, destination, dirs_exist_ok=True)
+
+
+async def run_hidden_tests(impl: str, hidden_test: str, *, timeout_s: float = 20.0) -> ExecResult:
+    """Run ``hidden_test`` against ``impl`` in a fresh directory holding only those two files.
+
+    Nothing else from the agent's sandbox is copied, so edited tests, conftest
+    files or pytest configuration cannot influence the result. This is the
+    held-out check that decides whether a task was actually solved.
+
+    Args:
+        impl: Final contents of the implementation file.
+        hidden_test: Contents of a test module the agent never saw.
+        timeout_s: Wall-clock limit for the pytest run.
+    """
+    with Sandbox({IMPL_FILE: impl, HIDDEN_TEST_FILE: hidden_test}, timeout_s=timeout_s) as fresh:
+        return await fresh.run_pytest(HIDDEN_TEST_FILE)

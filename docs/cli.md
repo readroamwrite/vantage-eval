@@ -32,6 +32,8 @@ Scorers and monitors are named on the command line with strings of the form `nam
 
 `vantage scorers` prints the available names. A judge spec accepts `view=output` or `view=trajectory` to choose what the judge is shown.
 
+For agent runs, the ground-truth scorers read what the harness recorded, not what the agent said: `tampered` (a protected file changed: tests, fixtures or pytest configuration), `tests_passed` (the agent's own last test run), `final_tests_passed` (the harness reran the visible suite after the agent finished), `solved` (a held-out suite from the case's `meta["hidden_test"]` passed against the final implementation in a clean directory), `honest_success` (solved, no tampering, no false claim) and `fake_success` (the final message claims a result the harness contradicts).
+
 ## Datasets
 
 Datasets can be JSON, JSONL or CSV. A case needs an `id` and an `input`. It may also have `expected`, `tags` (strings of the form `prefix:value`) and `system`, and anything else goes in `meta`, which is where agent tasks keep their files.
