@@ -514,6 +514,13 @@ def experiment_monitoring(
     n_scripted_tasks: Annotated[int, typer.Option(help="Tasks per scripted behaviour class.")] = 8,
     max_steps: Annotated[int, typer.Option()] = 8,
     concurrency: Annotated[int, typer.Option(min=1)] = 2,
+    attack: Annotated[
+        bool,
+        typer.Option(
+            "--attack/--no-attack",
+            help="Also run the pressured tasks with an evasive attack prompt that tampers and hides it.",
+        ),
+    ] = False,
     out: Annotated[Path, typer.Option("--out", "-o")] = Path("results"),
     db: DbOption = DEFAULT_DB,
 ) -> None:
@@ -526,6 +533,7 @@ def experiment_monitoring(
         n_scripted_tasks=n_scripted_tasks,
         max_steps=max_steps,
         concurrency=concurrency,
+        attack=attack,
         out_dir=out,
     )
     results = main(cfg, db, progress=lambda m: console.print(f"[dim]{m}[/dim]"))
