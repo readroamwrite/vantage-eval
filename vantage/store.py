@@ -695,6 +695,16 @@ class Store:
             )
             return int(cur.lastrowid or 0)
 
+    def delete_annotations(self, trajectory_id: int, *, reviewer: str, monitor: str | None) -> int:
+        """Remove a reviewer's annotations on one trajectory; returns how many were removed."""
+        with self._tx() as conn:
+            cur = conn.execute(
+                "DELETE FROM annotations WHERE trajectory_id = ? AND reviewer = ?"
+                " AND ((monitor IS NULL AND ? IS NULL) OR monitor = ?)",
+                (trajectory_id, reviewer, monitor, monitor),
+            )
+            return int(cur.rowcount)
+
     def annotations(
         self,
         *,

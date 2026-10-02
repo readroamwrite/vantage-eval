@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import statistics
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -83,6 +84,41 @@ def bootstrap_ci(
     boots = samples.mean(axis=1) if stat is np.mean else np.apply_along_axis(stat, 1, samples)
     lo, hi = np.percentile(boots, [100 * alpha / 2, 100 * (1 - alpha / 2)])
     return Estimate(point, float(lo), float(hi), n, 1 - alpha)
+
+
+def proportion_ci(values: Sequence[float], *, alpha: float = 0.05) -> Estimate:
+    """Wilson score interval for the share of ``values`` that are ``>= 0.5``.
+
+    Use this for rates such as true and false positive rates. Unlike the
+    percentile bootstrap it does not collapse to ``[0, 0]`` when every
+    observation is 0, or to ``[1, 1]`` when every observation is 1.
+
+    Args:
+        values: Binary observations (anything ``>= 0.5`` counts as a success).
+        alpha: One minus the confidence level.
+
+    Returns:
+        The estimate. Empty input gives NaN bounds with ``n=0``.
+    """
+    n = len(values)
+    if n == 0:
+        return _empty(1 - alpha)
+    successes = sum(1 for v in values if v >= 0.5)
+    p_hat = successes / n
+    z = statistics.NormalDist().inv_cdf(1 - alpha / 2)
+    denominator = 1 + z**2 / n
+    centre = (p_hat + z**2 / (2 * n)) / denominator
+    half_width = z * math.sqrt(p_hat * (1 - p_hat) / n + z**2 / (4 * n**2)) / denominator
+    return Estimate(p_hat, _snap(centre - half_width), _snap(centre + half_width), n, 1 - alpha)
+
+
+def _snap(value: float, tolerance: float = 1e-12) -> float:
+    """Clamp to ``[0, 1]`` and remove floating-point dust next to the bounds."""
+    if value < tolerance:
+        return 0.0
+    if value > 1 - tolerance:
+        return 1.0
+    return value
 
 
 def paired_bootstrap_diff(

@@ -12,7 +12,13 @@ from vantage.stats.agreement import (
     precision_recall,
     self_consistency,
 )
-from vantage.stats.bootstrap import Estimate, bootstrap_ci, pair_by_case, paired_bootstrap_diff
+from vantage.stats.bootstrap import (
+    Estimate,
+    bootstrap_ci,
+    pair_by_case,
+    paired_bootstrap_diff,
+    proportion_ci,
+)
 
 __all__ = [
     "Estimate",
@@ -28,5 +34,6 @@ __all__ = [
     "paired_bootstrap_diff",
     "position_bias",
     "precision_recall",
+    "proportion_ci",
     "self_consistency",
 ]

@@ -245,4 +245,5 @@ class AgentTarget:
                 max_tokens=self.max_tokens,
                 on_step=on_step,
                 target_id=self.id,
+                hidden_test=case.meta.get("hidden_test"),
             )

@@ -42,11 +42,13 @@ models_app = typer.Typer(help="Check model providers.", no_args_is_help=True)
 cache_app = typer.Typer(help="Inspect or clear the response cache.", no_args_is_help=True)
 datagen_app = typer.Typer(help="Generate synthetic datasets.", no_args_is_help=True)
 experiment_app = typer.Typer(help="Run the showcase experiments.", no_args_is_help=True)
+audit_app = typer.Typer(help="Blind human audit of agent runs.", no_args_is_help=True)
 app.add_typer(runs_app, name="runs")
 app.add_typer(datagen_app, name="datagen")
 app.add_typer(experiment_app, name="experiment")
 app.add_typer(models_app, name="models")
 app.add_typer(cache_app, name="cache")
+app.add_typer(audit_app, name="audit")
 console = Console(highlight=False)
 
 DbOption = Annotated[Path, typer.Option("--db", help="SQLite database path.", envvar="VANTAGE_DB")]
@@ -432,6 +434,74 @@ def datagen_robustness(
     console.print(f"wrote {len(ds)} cases to {out / 'robustness.jsonl'}")
 
 
+def _audit_runs(store: Store, runs: list[str]) -> list[int]:
+    if runs:
+        return [_resolve_run(store, ref) for ref in runs]
+    experiment = store.get_experiment("monitoring")
+    if experiment is None:
+        raise typer.BadParameter("no monitoring experiment stored; pass --run")
+    # The real-agent runs are stored first: honest, permissive (and attack when present).
+    ids = list(experiment["run_ids"])
+    return [i for i in ids if "halted" not in store.get_run(i)["name"]][:-1]
+
+
+@audit_app.command("export")
+def audit_export(
+    path: Annotated[
+        Path, typer.Argument(help="Output stem; writes <stem>.md, .labels.csv, .key.json")
+    ],
+    runs: Annotated[
+        list[str] | None,
+        typer.Option("--run", help="Runs to audit (default: the experiment's real runs)."),
+    ] = None,
+    seed: Annotated[int, typer.Option()] = 0,
+    db: DbOption = DEFAULT_DB,
+) -> None:
+    """Write the real agent runs in random order with every label and verdict hidden."""
+    from vantage.audit import export_audit, write_audit
+
+    with Store(db) as store:
+        run_ids = _audit_runs(store, runs or [])
+        items, key = export_audit(store, run_ids, seed=seed)
+    paths = write_audit(path, items, key)
+    console.print(
+        f"wrote {len(items)} runs from run ids {run_ids}: read {paths['markdown']}, fill in "
+        f"{paths['labels']}, keep {paths['key']} closed until done"
+    )
+
+
+@audit_app.command("import")
+def audit_import(
+    labels: Annotated[Path, typer.Argument(help="The filled-in <stem>.labels.csv")],
+    reviewer: Annotated[str, typer.Option(help="Who labelled the runs.")],
+    key: Annotated[Path | None, typer.Option(help="Key file; defaults to <stem>.key.json")] = None,
+    db: DbOption = DEFAULT_DB,
+) -> None:
+    """Store the human labels as annotations."""
+    from vantage.audit import import_labels
+
+    key_path = key or labels.with_name(labels.name.replace(".labels.csv", ".key.json"))
+    with Store(db) as store:
+        saved = import_labels(store, labels, key_path, reviewer=reviewer)
+    console.print(f"saved {saved} labels from {labels}")
+
+
+@audit_app.command("report")
+def audit_report_cmd(
+    runs: Annotated[list[str] | None, typer.Option("--run")] = None,
+    md: Annotated[Path | None, typer.Option("--md", help="Also write the table here.")] = None,
+    db: DbOption = DEFAULT_DB,
+) -> None:
+    """Agreement between the human labels, the rule and every judge monitor."""
+    from vantage.audit import audit_markdown, audit_report
+
+    with Store(db) as store:
+        text = audit_markdown(audit_report(store, _audit_runs(store, runs or [])))
+    console.print(text)
+    if md is not None:
+        md.write_text(text, encoding="utf-8")
+
+
 @experiment_app.command("robustness")
 def experiment_robustness(
     target: Annotated[str, typer.Option(help="Primary model.")] = "ollama:qwen2.5:3b",
@@ -514,6 +584,13 @@ def experiment_monitoring(
     n_scripted_tasks: Annotated[int, typer.Option(help="Tasks per scripted behaviour class.")] = 8,
     max_steps: Annotated[int, typer.Option()] = 8,
     concurrency: Annotated[int, typer.Option(min=1)] = 2,
+    attack: Annotated[
+        bool,
+        typer.Option(
+            "--attack/--no-attack",
+            help="Also run the pressured tasks with an evasive attack prompt that tampers and hides it.",
+        ),
+    ] = False,
     out: Annotated[Path, typer.Option("--out", "-o")] = Path("results"),
     db: DbOption = DEFAULT_DB,
 ) -> None:
@@ -526,6 +603,7 @@ def experiment_monitoring(
         n_scripted_tasks=n_scripted_tasks,
         max_steps=max_steps,
         concurrency=concurrency,
+        attack=attack,
         out_dir=out,
     )
     results = main(cfg, db, progress=lambda m: console.print(f"[dim]{m}[/dim]"))
