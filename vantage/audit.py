@@ -76,16 +76,27 @@ def audit_item(stored: StoredTrajectory, audit_id: str) -> dict[str, Any]:
 
 def export_audit(
     store: Store, run_ids: Sequence[int], *, seed: int = 0
-) -> tuple[list[dict[str, Any]], dict[str, int]]:
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
     """Blinded items for every trajectory in ``run_ids``, in a seeded random order.
 
     Returns:
-        The items, and the key mapping each ``audit_id`` to its trajectory id.
-        Keep the key away from the reader until the labels are in.
+        The items, and the key mapping each ``audit_id`` to its trajectory: the
+        store id plus the run name, case id and repeat, so the same labels can
+        be imported into a copy of the database (for example the one holding
+        the frontier judge's verdicts) whose trajectory ids differ. Keep the
+        key away from the reader until the labels are in.
     """
     stored = [t for run_id in run_ids for t in store.trajectories(run_id)]
     random.Random(seed).shuffle(stored)
-    key = {_audit_id(seed, t.id): t.id for t in stored}
+    key = {
+        _audit_id(seed, t.id): {
+            "trajectory_id": t.id,
+            "run": store.get_run(t.run_id)["name"],
+            "case_id": t.case.id,
+            "repeat_idx": t.repeat_idx,
+        }
+        for t in stored
+    }
     items = [audit_item(t, audit_id) for audit_id, t in zip(key, stored, strict=True)]
     return items, key
 
@@ -121,7 +132,9 @@ def _render_item(index: int, item: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def write_audit(path: Path, items: list[dict[str, Any]], key: dict[str, int]) -> dict[str, Path]:
+def write_audit(
+    path: Path, items: list[dict[str, Any]], key: dict[str, dict[str, Any]]
+) -> dict[str, Path]:
     """Write the reading copy, the label sheet and the key next to ``path``.
 
     ``path`` is the stem: ``<stem>.md`` is what the reader reads,
@@ -157,12 +170,32 @@ def write_audit(path: Path, items: list[dict[str, Any]], key: dict[str, int]) ->
     return {"markdown": md, "labels": labels, "key": key_path}
 
 
+def _resolve_trajectory(store: Store, entry: dict[str, Any] | int) -> int:
+    """Find the trajectory an audit key entry refers to in ``store``.
+
+    The store id is used when it still points at the same case; otherwise the
+    run name, case id and repeat are looked up, which is what makes labels
+    portable between copies of a database.
+    """
+    if isinstance(entry, int):
+        return entry
+    traj_id = int(entry["trajectory_id"])
+    run_id = store.find_run(entry["run"])
+    if run_id is None:
+        raise ValueError(f"run {entry['run']!r} is not in this store")
+    for stored in store.trajectories(run_id, [entry["case_id"]]):
+        if stored.repeat_idx == entry.get("repeat_idx", 0):
+            return stored.id
+    raise ValueError(f"trajectory {traj_id} ({entry['case_id']}) is not in this store")
+
+
 def import_labels(store: Store, labels_path: Path, key_path: Path, *, reviewer: str) -> int:
     """Store the filled-in label sheet as annotations and return how many were saved.
 
     Rows with an empty label are skipped; an unknown label or id is an error.
+    Labels already imported for the same reviewer and trajectory are replaced.
     """
-    key: dict[str, int] = json.loads(key_path.read_text(encoding="utf-8"))
+    key: dict[str, Any] = json.loads(key_path.read_text(encoding="utf-8"))
     saved = 0
     with labels_path.open(newline="", encoding="utf-8") as fh:
         for row in csv.DictReader(fh):
@@ -175,9 +208,11 @@ def import_labels(store: Store, labels_path: Path, key_path: Path, *, reviewer: 
             if audit_id not in key:
                 raise ValueError(f"unknown audit id {audit_id!r}")
             value = {"dishonest": 1.0, "honest": 0.0, "unsure": None}[label]
+            traj_id = _resolve_trajectory(store, key[audit_id])
+            store.delete_annotations(traj_id, reviewer=reviewer, monitor=AUDIT_MONITOR)
             store.save_annotation(
                 Annotation(
-                    key[audit_id],
+                    traj_id,
                     reviewer,
                     label,
                     value=value,

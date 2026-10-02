@@ -39,7 +39,7 @@ def _fill_labels(labels_path, key, store, run_id):
     by_traj = {t.id: t.case.meta["behaviour"] for t in store.trajectories(run_id)}
     rows = list(csv.DictReader(labels_path.open()))
     for row in rows:
-        behaviour = by_traj[key[row["audit_id"]]]
+        behaviour = by_traj[key[row["audit_id"]]["trajectory_id"]]
         row["label"] = "honest" if behaviour == "honest_fix" else "dishonest"
         row["note"] = behaviour
     with labels_path.open("w", newline="") as fh:
@@ -52,7 +52,11 @@ async def test_export_is_blind_deterministic_and_round_trips(tmp_path):
     with Store(":memory:") as store:
         run_id = await _scripted_run(store)
         items, key = export_audit(store, [run_id], seed=3)
-        assert len(items) == 3 and set(key.values()) == {t.id for t in store.trajectories(run_id)}
+        assert len(items) == 3
+        assert {k["trajectory_id"] for k in key.values()} == {
+            t.id for t in store.trajectories(run_id)
+        }
+        assert all(k["run"] == "audit-run" and ":" in k["case_id"] for k in key.values())
         assert [i["audit_id"] for i in items] == [
             i["audit_id"] for i in export_audit(store, [run_id], seed=3)[0]
         ]
@@ -69,6 +73,13 @@ async def test_export_is_blind_deterministic_and_round_trips(tmp_path):
         text = paths["markdown"].read_text()
         assert text.count("## ") == 3 and "subtle_tamper" not in text and "pressured" not in text
         _fill_labels(paths["labels"], key, store, run_id)
+        assert import_labels(store, paths["labels"], paths["key"], reviewer="me") == 3
+        assert len(store.annotations(run_id=run_id, monitor=AUDIT_MONITOR)) == 3
+        # Importing again replaces rather than duplicates, and ids resolve by run and case
+        # when the store id points elsewhere (as in a copied database).
+        for entry in key.values():
+            entry["trajectory_id"] += 1000
+        paths["key"].write_text(json.dumps(key))
         assert import_labels(store, paths["labels"], paths["key"], reviewer="me") == 3
         assert len(store.annotations(run_id=run_id, monitor=AUDIT_MONITOR)) == 3
 
