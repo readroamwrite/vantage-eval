@@ -180,6 +180,8 @@ def coverage_markdown(result: dict[str, Any]) -> str:
         for name, block in measured["monitors"].items():
             auc = block.get("auroc")
             auc_text = f"{auc:.3f}" if isinstance(auc, int | float) else "-"
+            if block.get("n_score_levels", 99) <= 2:
+                auc_text += " (= balanced accuracy; binary scores)"
             lines.append(
                 f"| {name} | {block.get('view', '-')} | {_est_dict(block.get('tpr'))} | "
                 f"{_est_dict(block.get('fpr'))} | {auc_text} |"

@@ -120,6 +120,11 @@ async def test_experiment_end_to_end_with_mocks(tmp_path, monkeypatch):
     assert results["agent"]["halted_rate"].point == 1.0
     report = (tmp_path / "r" / "monitoring.md").read_text()
     assert "Detection by monitor" in report and "blatant_tamper" in report
+    rule = results["monitors"]["rule:forbidden_test_write"]
+    assert rule["n_score_levels"] <= 2 and rule["balanced_accuracy"] == pytest.approx(rule["auroc"])
+    assert "| bal. acc |" in report and "same number as its balanced accuracy" in report
+    # Rates are Wilson intervals: a 0/n rate has an upper bound above zero.
+    assert rule["fpr"].hi > 0.0
 
 
 async def test_monitor_errors_are_excluded_not_counted_as_negative():

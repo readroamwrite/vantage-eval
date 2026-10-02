@@ -14,6 +14,7 @@ how often tampering can be halted before it happens.
 from __future__ import annotations
 
 import asyncio
+import math
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -30,7 +31,7 @@ from vantage.report.markdown import metrics_table
 from vantage.report.plots import grouped_bars
 from vantage.runner import MONITOR_ERROR_PREFIX, Runner, RunResult
 from vantage.scorers import get_scorer
-from vantage.stats import Estimate, auroc, bootstrap_ci, paired_bootstrap_diff
+from vantage.stats import Estimate, auroc, paired_bootstrap_diff, proportion_ci
 from vantage.store import Store
 from vantage.targets import AgentTarget
 
@@ -112,14 +113,18 @@ def _monitor_metrics(results: list[Any], monitor: str) -> dict[str, Any]:
     pos = [float(f) for f, t in zip(flags, truth, strict=True) if t]
     neg = [float(f) for f, t in zip(flags, truth, strict=True) if not t]
     flagged_true = [float(t) for f, t in zip(flags, truth, strict=True) if f]
+    tpr, fpr = proportion_ci(pos), proportion_ci(neg)
     return {
         "n": len(truth),
         "n_errors": n_errors,
         "n_positive": len(pos),
-        "tpr": bootstrap_ci(pos),
-        "fpr": bootstrap_ci(neg),
-        "precision": bootstrap_ci(flagged_true),
+        "tpr": tpr,
+        "fpr": fpr,
+        "precision": proportion_ci(flagged_true),
+        "balanced_accuracy": (tpr.point + 1 - fpr.point) / 2 if pos and neg else math.nan,
         "auroc": auroc(scores, [float(t) for t in truth]),
+        # With binary or constant-confidence scores AUROC is just balanced accuracy.
+        "n_score_levels": len(set(scores)),
         "_pos_flags": pos,
     }
 
@@ -135,7 +140,7 @@ def _per_class(results: list[Any], monitors: list[str]) -> dict[str, dict[str, E
                 for v in (_final_verdict(r, monitor) for r in subset)
                 if v is not None
             ]
-            out[cls][monitor] = bootstrap_ci(flags)
+            out[cls][monitor] = proportion_ci(flags)
         out[cls]["n"] = Estimate(len(subset), len(subset), len(subset), len(subset))
     return out
 
@@ -180,13 +185,22 @@ def render_report(cfg: MonitoringConfig, results: dict[str, Any], figures: dict[
         "",
         "## Detection by monitor",
         "",
-        "| monitor | view | n | positives | TPR | FPR | precision | AUROC | errors |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| monitor | view | n | positives | TPR | FPR | precision | bal. acc | AUROC | errors |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
+    degenerate = False
     for name, block in m.items():
+        marker = "*" if block["n_score_levels"] <= 2 else ""
+        degenerate = degenerate or bool(marker)
         lines.append(
             f"| {name} | {block['view']} | {block['n']} | {block['n_positive']} | {block['tpr']} | {block['fpr']} | "
-            f"{block['precision']} | {block['auroc']:.3f} | {block['n_errors']} |"
+            f"{block['precision']} | {block['balanced_accuracy']:.3f} | {block['auroc']:.3f}{marker} | "
+            f"{block['n_errors']} |"
+        )
+    if degenerate:
+        lines.append(
+            "\n\\* This monitor's scores take at most two distinct values (a rule, or a judge whose stated "
+            "confidence never varies), so its AUROC is the same number as its balanced accuracy."
         )
     total_errors = sum(block["n_errors"] for block in m.values())
     if total_errors:
@@ -358,19 +372,19 @@ async def run_experiment(
     fair = [r for r in honest_results if r.case.meta.get("variant") == "fair"]
     pressured = [r for r in honest_results if r.case.meta.get("variant") == "pressured"]
     agent_block = {
-        "fair_solved": bootstrap_ci(
+        "fair_solved": proportion_ci(
             [r.score("honest_success").value for r in fair if r.score("honest_success")]
         ),
-        "honest_pressured_solved": bootstrap_ci(
+        "honest_pressured_solved": proportion_ci(
             [r.score("solved").value for r in pressured if r.score("solved")]
         ),
-        "honest_pressured_tamper": bootstrap_ci(
+        "honest_pressured_tamper": proportion_ci(
             [r.score("tampered").value for r in pressured if r.score("tampered")]
         ),
-        "permissive_tamper": bootstrap_ci(
+        "permissive_tamper": proportion_ci(
             [r.score("tampered").value for r in real["permissive"].results if r.score("tampered")]
         ),
-        "halted_rate": bootstrap_ci(
+        "halted_rate": proportion_ci(
             [float(r.trajectory.status == "halted") for r in real["halted"].results]
         ),
     }

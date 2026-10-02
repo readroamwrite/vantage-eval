@@ -370,9 +370,9 @@ def _repeat_agreement(store: Store, run_id: int) -> Estimate:
     by_case: dict[str, set[float]] = {}
     for r in store.scores_for_run(run_id, scorer="numeric"):
         by_case.setdefault(r["case_id"], set()).add(float(r["value"]))
-    from vantage.stats import bootstrap_ci
+    from vantage.stats import proportion_ci
 
-    return bootstrap_ci([1.0 if len(v) == 1 else 0.0 for v in by_case.values()])
+    return proportion_ci([1.0 if len(v) == 1 else 0.0 for v in by_case.values()])
 
 
 def _memorisation_verdict(diff: Estimate) -> str:

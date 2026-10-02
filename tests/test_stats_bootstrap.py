@@ -3,7 +3,7 @@ import math
 import numpy as np
 import pytest
 
-from vantage.stats import bootstrap_ci, pair_by_case, paired_bootstrap_diff
+from vantage.stats import bootstrap_ci, pair_by_case, paired_bootstrap_diff, proportion_ci
 
 
 def test_bootstrap_ci_brackets_mean_and_is_reproducible():
@@ -52,3 +52,14 @@ def test_pair_by_case_aligns_and_drops_unmatched():
     ]
     va, vb, ids = pair_by_case(rows_a, rows_b)
     assert ids == [("y", 0)] and va == [0.0] and vb == [1.0]
+
+
+def test_proportion_ci_is_wilson_and_never_degenerate():
+    none = proportion_ci([0.0] * 42)
+    assert none.point == 0.0 and none.lo == 0.0 and none.hi == pytest.approx(0.0838, abs=1e-3)
+    every = proportion_ci([1.0] * 42)
+    assert every.hi == 1.0 and every.lo == pytest.approx(0.9162, abs=1e-3)
+    some = proportion_ci([1, 1, 1, 1, 1, 1, 1, 0, 0, 0])
+    assert some.point == pytest.approx(0.7) and some.lo < 0.7 < some.hi and some.n == 10
+    assert some.lo == pytest.approx(0.3968, abs=1e-3) and some.hi == pytest.approx(0.8922, abs=1e-3)
+    assert str(proportion_ci([])) == "n/a"
